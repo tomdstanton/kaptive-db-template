@@ -7,7 +7,7 @@ on:
 
 jobs:
   call-central-workflow:
-    # Point this directly to your central repository and the specific workflow file
+    if: github.repository != 'tomdstanton/kaptive-db-template'
     uses: klebgenomics/Kaptive/.github/workflows/database_cicd.yml@main
     permissions:
       contents: write # Pass write permissions down to the central workflow
