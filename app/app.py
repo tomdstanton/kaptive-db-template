@@ -10,6 +10,36 @@ st.set_page_config(page_title="Kaptive Metadata Generator", layout="centered")
 st.title("🧬 Kaptive Metadata Generator")
 st.markdown("Fill out the fields below to generate your Kaptive database `metadata.toml` file.")
 
+# Initialize persistent storage for DOIs
+if 'doi_list' not in st.session_state:
+    st.session_state.doi_list = []
+
+# Helper Function: Fetch DOIs from Crossref based on title search
+@st.cache_data(ttl=3600)
+def fetch_crossref_dois(search_term):
+    if not search_term.strip():
+        return []
+    try:
+        encoded_term = urllib.parse.quote(search_term)
+        url = f"https://api.crossref.org/works?query.title={encoded_term}&select=title,DOI&rows=5"
+        
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Kaptive-Metadata-Generator/1.0 (mailto:kaptive.typing@gmail.com)'
+        })
+        
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            
+        items = data.get("message", {}).get("items", [])
+        results = []
+        for item in items:
+            title = item.get("title", ["Unknown Title"])[0]
+            doi = item.get("DOI", "No DOI")
+            if doi != "No DOI":
+                results.append({"title": title, "doi": doi})
+        return results
+    except Exception:
+        return []
 
 # Helper Function: Fetch TaxIDs from NCBI Datasets API
 @st.cache_data(ttl=3600)  # Cache results for 1 hour to prevent redundant API calls
@@ -78,15 +108,15 @@ def fetch_github_gbk_files(owner, repo, branch):
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Biology & Taxonomy")
+    st.subheader("Biology & Taxonomy 🌳")
 
-    # 1. User types the name
+    # User types the name
     organism_input = st.text_input("Search Organism Name", value="Klebsiella oxytoca")
 
-    # 2. Trigger the Datasets API lookup behind the scenes
+    # Trigger the Datasets API lookup behind the scenes
     ncbi_options = fetch_ncbi_taxids(organism_input)
 
-    # 3. Present choices dynamically
+    # Present choices dynamically
     if ncbi_options:
         selected_option = st.selectbox(
             "Select Verified NCBI Taxonomy Match",
@@ -168,11 +198,54 @@ with col2:
         pathway = st.text_input("Specify Pathway")
 
     st.subheader("Contact & Citations")
-    doi = st.text_input("DOI", value="TBD")
     contact_name = st.text_input("Contact Name", value="Kelly Wyres")
     contact_email = st.text_input("Contact Email", value="kaptive.typing@gmail.com")
+    
+    st.markdown("**Paper DOIs**")
+    
+    # DOI Search Box
+    search_query = st.text_input("Search Paper by Title (Crossref)")
+    if search_query:
+        api_results = fetch_crossref_dois(search_query)
+        
+        if api_results:
+            selected_paper = st.selectbox(
+                "Select matching paper:", 
+                options=api_results, 
+                format_func=lambda x: f"{x['title']} (DOI: {x['doi']})"
+            )
+            
+            # The Add Button
+            if st.button("➕ Add to Database DOIs"):
+                if selected_paper['doi'] not in st.session_state.doi_list:
+                    st.session_state.doi_list.append(selected_paper['doi'])
+                    st.rerun() # instantly updates the preview below
+                else:
+                    st.warning("This DOI is already in your list.")
+        else:
+            st.warning("No papers found on Crossref.")
 
-# 3. Build the Data Dictionary
+    # Manual Entry alternative
+    with st.expander("Manually add a DOI (if not on Crossref)"):
+        manual_doi = st.text_input("Enter exact DOI:")
+        if st.button("➕ Add Manual DOI") and manual_doi:
+            if manual_doi not in st.session_state.doi_list:
+                st.session_state.doi_list.append(manual_doi)
+                st.rerun()
+
+    # Display the current "Shopping Cart" of DOIs
+    if st.session_state.doi_list:
+        for i, current_doi in enumerate(st.session_state.doi_list):
+            c1, c2 = st.columns([5, 1])
+            c1.code(current_doi)
+            # Remove button
+            if c2.button("❌", key=f"remove_doi_{i}"):
+                st.session_state.doi_list.pop(i)
+                st.rerun()
+    else:
+        st.info("No DOIs added. Array will default to ['TBD'].")
+
+# Build the Data Dictionary
 metadata = {
     "name": name,
     "keyword": keyword,
@@ -184,7 +257,7 @@ metadata = {
     "prefix": prefix,
     "version": version,
     "id_threshold": float(id_threshold),
-    "doi": [doi],
+    "doi": st.session_state.doi_list if len(st.session_state.doi_list) > 0 else ["TBD"],
     "owner": owner,
     "repo": repo,
     "branch": branch,
@@ -193,7 +266,7 @@ metadata = {
 
 st.divider()
 
-# 4. Generate & Preview TOML
+# Generate & Preview TOML
 toml_string = toml.dumps(metadata)
 
 st.subheader("Live Preview")
@@ -204,7 +277,7 @@ download_filename = "metadata.toml"  # Default fallback
 if genbank and genbank.endswith('.gbk'):
     download_filename = genbank.replace('.gbk', '.toml')
 
-# 5. Download Button
+# Download Button
 if is_valid_version:
     st.download_button(
         label=f"⬇️ Download {download_filename}",
