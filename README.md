@@ -3,6 +3,10 @@
 # kaptive-db-template
 *A template repo for managing [Kaptive](https://github.com/klebgenomics/Kaptive/) databases*
 
+[![Streamlit App](https://img.shields.io/badge/Streamlit-%23FE4B4B.svg?logo=streamlit&logoColor=white)](https://kaptive-metadata.streamlit.app/)
+[![Release Database](https://github.com/tomdstanton/kaptive-db-template/actions/workflows/release.yml/badge.svg)](https://github.com/tomdstanton/kaptive-db-template/actions/workflows/release.yml)
+
+
 ## Database Versioning & Release Workflow 🚀
 
 This repository uses a fully automated Continuous Integration / Continuous Deployment (CI/CD) pipeline to manage database versions.
