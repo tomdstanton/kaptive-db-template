@@ -105,9 +105,30 @@ def fetch_github_gbk_files(owner, repo, branch):
         return None
 
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
 with col1:
+    st.subheader("Repository & Files 📂")
+    owner = st.text_input("Owner", value="klebgenomics")
+    repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
+    branch = st.text_input("Branch", value="main")
+
+    # Trigger the GitHub API lookup
+    gbk_files = fetch_github_gbk_files(owner, repo, branch)
+
+    # Dynamic Validation & Dropdown
+    if gbk_files is None:
+        st.error("⚠️ Repository not found. Please check Owner, Repo, and Branch.")
+        genbank = st.text_input("GenBank File (Manual Entry)")
+    elif len(gbk_files) == 0:
+        st.warning(f"No '.gbk' files found in {owner}/{repo} on branch '{branch}'.")
+        genbank = st.text_input("GenBank File (Manual Entry)")
+    else:
+        st.success(f"Found {len(gbk_files)} GenBank file(s)!")
+        genbank = st.selectbox("Select GenBank File", options=gbk_files)
+
+
+with col2:
     st.subheader("Biology & Taxonomy 🌳")
 
     # User types the name
@@ -165,28 +186,15 @@ with col1:
 
     version = version_input  # Still map it to the dictionary so the preview works
 
-with col2:
-    st.subheader("Repository & Files")
-    owner = st.text_input("Owner", value="klebgenomics")
-    repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
-    branch = st.text_input("Branch", value="main")
-
-    # Trigger the GitHub API lookup
-    gbk_files = fetch_github_gbk_files(owner, repo, branch)
-
-    # Dynamic Validation & Dropdown
-    if gbk_files is None:
-        st.error("⚠️ Repository not found. Please check Owner, Repo, and Branch.")
-        genbank = st.text_input("GenBank File (Manual Entry)")
-    elif len(gbk_files) == 0:
-        st.warning(f"No '.gbk' files found in {owner}/{repo} on branch '{branch}'.")
-        genbank = st.text_input("GenBank File (Manual Entry)")
-    else:
-        st.success(f"Found {len(gbk_files)} GenBank file(s)!")
-        genbank = st.selectbox("Select GenBank File", options=gbk_files)
-
     st.subheader("Database Config")
-    id_threshold = st.number_input("ID Threshold (%)", value=82.5, format="%.1f")
+    id_threshold = st.slider(
+        "ID Threshold (%)", 
+        min_value=0.0, 
+        max_value=100.0, 
+        value=82.5, 
+        step=0.5, 
+        format="%.1f"
+    )
 
     st.subheader("Biological Attributes")
     antigen = st.selectbox("Antigen", ["Capsular polysaccharide", "O antigen", "Other"])
@@ -197,7 +205,9 @@ with col2:
     if pathway == "Other":
         pathway = st.text_input("Specify Pathway")
 
-    st.subheader("Contact & Citations")
+
+with col3:
+    st.subheader("Contact & Citations 📚")
     contact_name = st.text_input("Contact Name", value="Kelly Wyres")
     contact_email = st.text_input("Contact Email", value="kaptive.typing@gmail.com")
     
