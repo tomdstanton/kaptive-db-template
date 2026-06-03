@@ -105,10 +105,10 @@ def fetch_github_gbk_files(owner, repo, branch):
         return None
 
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.subheader("Database and Biology 🦠")
+    st.subheader("Database 📂")
     owner = st.text_input("Owner", value="klebgenomics")
     repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
     branch = st.text_input("Branch", value="main")
@@ -144,7 +144,9 @@ with col1:
         organism = st.text_input("Organism Custom Name", value=organism_input)
         taxon = st.number_input("Taxon ID (Manual)", value=571, step=1)
 
-         # Collect prefix first so it can feed into both downstream suggestions
+
+with col2:
+    st.subheader("Biology 🦠")
     prefix = st.text_input("Prefix", value="K")
 
     # Safe string parsing for the new keyword rule
@@ -184,7 +186,7 @@ with col1:
         pathway = st.text_input("Specify Pathway")
 
 
-with col2:
+with col3:
     st.subheader("Curation 📚")
     version_input = st.text_input("Version", value="0.0.0")
 
