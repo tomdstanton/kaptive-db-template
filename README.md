@@ -1,5 +1,7 @@
+<img align="right" src="https://github.com/klebgenomics/Kaptive/blob/master/docs/assets/logo.png?raw=true" alt="Kaptive" width="200">
+
 # kaptive-db-template
-A template repo for managing Kaptive databases
+*A template repo for managing [Kaptive](https://github.com/klebgenomics/Kaptive/) databases*
 
 ## Database Versioning & Release Workflow 🚀
 
