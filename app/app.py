@@ -105,10 +105,10 @@ def fetch_github_gbk_files(owner, repo, branch):
         return None
 
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Database 💽")
+    st.subheader("Database and Biology 🦠")
     owner = st.text_input("Owner", value="klebgenomics")
     repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
     branch = st.text_input("Branch", value="main")
@@ -148,20 +148,7 @@ with col1:
     # Present text inputs populated with your dynamic defaults
     keyword = st.text_input("Keyword", value=suggested_keyword)
     name = st.text_input("Database Config Name", value=suggested_name)
-    # Collect the raw input
-    version_input = st.text_input("Version", value="0.0.0")
 
-    # Validate the input
-    is_valid_version = True
-    if not semver.VersionInfo.is_valid(version_input):
-        st.error("⚠️ Invalid SemVer format. Must be MAJOR.MINOR.PATCH (e.g., '0.0.0').")
-        is_valid_version = False
-
-    version = version_input  # Still map it to the dictionary so the preview works
-
-
-with col2:
-    st.subheader("Biology 🦠")
     organism_input = st.text_input("Search Organism Name", value="Klebsiella oxytoca")
     ncbi_options = fetch_ncbi_taxids(organism_input)
     # Present choices dynamically
@@ -197,8 +184,18 @@ with col2:
         pathway = st.text_input("Specify Pathway")
 
 
-with col3:
+with col2:
     st.subheader("Curation 📚")
+    version_input = st.text_input("Version", value="0.0.0")
+
+    # Validate the input
+    is_valid_version = True
+    if not semver.VersionInfo.is_valid(version_input):
+        st.error("⚠️ Invalid SemVer format. Must be MAJOR.MINOR.PATCH (e.g., '0.0.0').")
+        is_valid_version = False
+
+    version = version_input  # Still map it to the dictionary so the preview works
+    
     contact_name = st.text_input("Contact Name", value="Kelly Wyres")
     contact_email = st.text_input("Contact Email", value="kaptive.typing@gmail.com")
     
