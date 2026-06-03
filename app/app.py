@@ -108,7 +108,7 @@ def fetch_github_gbk_files(owner, repo, branch):
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.subheader("Repository & Files 📂")
+    st.subheader("Database 💽")
     owner = st.text_input("Owner", value="klebgenomics")
     repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
     branch = st.text_input("Branch", value="main")
@@ -127,34 +127,7 @@ with col1:
         st.success(f"Found {len(gbk_files)} GenBank file(s)!")
         genbank = st.selectbox("Select GenBank File", options=gbk_files)
 
-
-with col2:
-    st.subheader("Biology & Taxonomy 🌳")
-
-    # User types the name
-    organism_input = st.text_input("Search Organism Name", value="Klebsiella oxytoca")
-
-    # Trigger the Datasets API lookup behind the scenes
-    ncbi_options = fetch_ncbi_taxids(organism_input)
-
-    # Present choices dynamically
-    if ncbi_options:
-        selected_option = st.selectbox(
-            "Select Verified NCBI Taxonomy Match",
-            options=ncbi_options,
-            format_func=lambda x: x["label"]
-        )
-        taxon = selected_option["id"]
-        organism = selected_option["name"]  # Use official scientific name from API
-        st.success(f"Selected Taxon ID: {taxon}")
-    else:
-        st.warning("No official NCBI records found. Please enter manually:")
-        organism = st.text_input("Organism Custom Name", value=organism_input)
-        taxon = st.number_input("Taxon ID (Manual)", value=571, step=1)
-
-    st.subheader("Basic Info")
-
-    # Collect prefix first so it can feed into both downstream suggestions
+     # Collect prefix first so it can feed into both downstream suggestions
     prefix = st.text_input("Prefix", value="K")
 
     # Safe string parsing for the new keyword rule
@@ -186,7 +159,26 @@ with col2:
 
     version = version_input  # Still map it to the dictionary so the preview works
 
-    st.subheader("Database Config")
+
+with col2:
+    st.subheader("Biology 🦠")
+    organism_input = st.text_input("Search Organism Name", value="Klebsiella oxytoca")
+    ncbi_options = fetch_ncbi_taxids(organism_input)
+    # Present choices dynamically
+    if ncbi_options:
+        selected_option = st.selectbox(
+            "Select Verified NCBI Taxonomy Match",
+            options=ncbi_options,
+            format_func=lambda x: x["label"]
+        )
+        taxon = selected_option["id"]
+        organism = selected_option["name"]  # Use official scientific name from API
+        st.success(f"Selected Taxon ID: {taxon}")
+    else:
+        st.warning("No official NCBI records found. Please enter manually:")
+        organism = st.text_input("Organism Custom Name", value=organism_input)
+        taxon = st.number_input("Taxon ID (Manual)", value=571, step=1)
+
     id_threshold = st.slider(
         "ID Threshold (%)", 
         min_value=0.0, 
@@ -195,8 +187,7 @@ with col2:
         step=0.5, 
         format="%.1f"
     )
-
-    st.subheader("Biological Attributes")
+    
     antigen = st.selectbox("Antigen", ["Capsular polysaccharide", "O antigen", "Other"])
     if antigen == "Other":
         antigen = st.text_input("Specify Antigen")
@@ -207,7 +198,7 @@ with col2:
 
 
 with col3:
-    st.subheader("Contact & Citations 📚")
+    st.subheader("Curation 📚")
     contact_name = st.text_input("Contact Name", value="Kelly Wyres")
     contact_email = st.text_input("Contact Email", value="kaptive.typing@gmail.com")
     
