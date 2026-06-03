@@ -127,7 +127,24 @@ with col1:
         st.success(f"Found {len(gbk_files)} GenBank file(s)!")
         genbank = st.selectbox("Select GenBank File", options=gbk_files)
 
-     # Collect prefix first so it can feed into both downstream suggestions
+    organism_input = st.text_input("Search Organism Name", value="Klebsiella oxytoca")
+    ncbi_options = fetch_ncbi_taxids(organism_input)
+    # Present choices dynamically
+    if ncbi_options:
+        selected_option = st.selectbox(
+            "Select Verified NCBI Taxonomy Match",
+            options=ncbi_options,
+            format_func=lambda x: x["label"]
+        )
+        taxon = selected_option["id"]
+        organism = selected_option["name"]  # Use official scientific name from API
+        st.success(f"Selected Taxon ID: {taxon}")
+    else:
+        st.warning("No official NCBI records found. Please enter manually:")
+        organism = st.text_input("Organism Custom Name", value=organism_input)
+        taxon = st.number_input("Taxon ID (Manual)", value=571, step=1)
+
+         # Collect prefix first so it can feed into both downstream suggestions
     prefix = st.text_input("Prefix", value="K")
 
     # Safe string parsing for the new keyword rule
@@ -148,23 +165,6 @@ with col1:
     # Present text inputs populated with your dynamic defaults
     keyword = st.text_input("Keyword", value=suggested_keyword)
     name = st.text_input("Database Config Name", value=suggested_name)
-
-    organism_input = st.text_input("Search Organism Name", value="Klebsiella oxytoca")
-    ncbi_options = fetch_ncbi_taxids(organism_input)
-    # Present choices dynamically
-    if ncbi_options:
-        selected_option = st.selectbox(
-            "Select Verified NCBI Taxonomy Match",
-            options=ncbi_options,
-            format_func=lambda x: x["label"]
-        )
-        taxon = selected_option["id"]
-        organism = selected_option["name"]  # Use official scientific name from API
-        st.success(f"Selected Taxon ID: {taxon}")
-    else:
-        st.warning("No official NCBI records found. Please enter manually:")
-        organism = st.text_input("Organism Custom Name", value=organism_input)
-        taxon = st.number_input("Taxon ID (Manual)", value=571, step=1)
 
     id_threshold = st.slider(
         "ID Threshold (%)", 
