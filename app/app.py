@@ -13,9 +13,12 @@ st.set_page_config(page_title="Kaptive Database Validator", layout="centered")
 st.title("🧬🦠💉 Kaptive Database Validator")
 st.markdown("Fill out the fields below to validate your Kaptive database and generate the metadata file.")
 
-# Initialize persistent storage for DOIs
+# Initialize persistent storage for DOIs and Contacts
 if 'doi_list' not in st.session_state:
     st.session_state.doi_list = []
+if 'contact_dict' not in st.session_state:
+    # Set the default curator on initial load
+    st.session_state.contact_dict = {"Kelly Wyres": "kaptive.typing@gmail.com"}
 
 def parse_database(fh):
     _LOCUS_REGEX = re_compile(r'locus:\s?(.*)$')
@@ -301,6 +304,7 @@ with col1:
 
 with col2:
     st.subheader("Biology 🦠")
+    st.markdown("**Start by entering an antigen prefix👇**")
     prefix = st.text_input("Prefix", value="K")
 
     org_parts = organism.strip().split()
@@ -346,10 +350,32 @@ with col3:
 
     version = version_input 
     
-    contact_name = st.text_input("Contact Name 🧑‍🔬", value="Kelly Wyres")
-    contact_email = st.text_input("Contact Email", value="kaptive.typing@gmail.com")
+    # --- Dynamic Multiple Contacts Logic ---
+    st.markdown("**Curators / Contacts 🧑‍🔬**")
     
-    st.markdown("**Paper DOIs**")
+    if st.session_state.contact_dict:
+        # Cast to list to avoid runtime errors if dictionary changes size
+        for c_name, c_email in list(st.session_state.contact_dict.items()):
+            c1, c2 = st.columns([5, 1])
+            c1.code(f"{c_name} <{c_email}>")
+            if c2.button("❌", key=f"remove_contact_{c_name}"):
+                del st.session_state.contact_dict[c_name]
+                st.rerun()
+    else:
+        st.warning("⚠️ No curators listed. Dictionary will default to 'TBD'.")
+
+    with st.expander("➕ Add Curator"):
+        new_c_name = st.text_input("Name (e.g. John Doe)")
+        new_c_email = st.text_input("Email (e.g. j.doe@email.com)")
+        if st.button("Add to Curators"):
+            if new_c_name and new_c_email:
+                st.session_state.contact_dict[new_c_name.strip()] = new_c_email.strip()
+                st.rerun()
+            else:
+                st.error("Both a name and email are required.")
+
+    st.markdown("---")
+    st.markdown("**Paper DOIs 📄**")
     
     search_query = st.text_input("Search Paper by Title (Crossref)")
     if search_query:
@@ -436,7 +462,8 @@ metadata = {
     "owner": owner,
     "repo": repo,
     "branch": branch,
-    "contact": {contact_name: contact_email}
+    # --- Assigning the new contact dict ---
+    "contact": st.session_state.contact_dict if len(st.session_state.contact_dict) > 0 else {"TBD": "TBD"}
 }
 
 st.divider()
