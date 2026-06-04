@@ -1,10 +1,12 @@
-
 import streamlit as st
 import toml
 import urllib.request
 import urllib.parse
 import json
 import semver
+import io  # <-- Added for BytesIO
+from re import compile as re_compile
+from gb_io import iter as GenbankIterator
 
 st.set_page_config(page_title="Kaptive Metadata Generator", layout="centered")
 st.title("🧬 Kaptive Metadata Generator")
@@ -13,6 +15,41 @@ st.markdown("Fill out the fields below to generate your Kaptive database `metada
 # Initialize persistent storage for DOIs
 if 'doi_list' not in st.session_state:
     st.session_state.doi_list = []
+
+def parse_database(fh):
+    _LOCUS_REGEX = re_compile(r'locus:\s?(.*)$')
+    _SEROTYPE_REGEX = re_compile(r'type:\s?(.*)$')
+    _EXTRA_REGEX = re_compile(r'Extra genes:\s?(.*)$')
+    
+    loci, extra = [], []
+    for rec in GenbankIterator(fh):
+        locus_name, serotype = None, None
+
+        if not (notes := [i.value for i in rec.features[0].qualifiers if i.key == 'note']):
+            # FIX: Raised as ValueError and ensured it's an f-string
+            raise ValueError(f'Locus has no "note" qualifiers: {rec.name}')
+
+        locus_name, serotype = None, None
+        for note in notes:  # type: str
+            if match := _EXTRA_REGEX.search(note):
+                locus_name = match.group(1)
+                extra.append(locus_name)
+                break
+
+            if not locus_name and (match := _LOCUS_REGEX.search(note)):
+                locus_name = match.group(1)
+
+            if not serotype and (match := _SEROTYPE_REGEX.search(note)):
+                serotype = match.group(1)
+
+        if not locus_name:
+            # FIX: Raised as ValueError and added missing 'f' for the f-string
+            raise ValueError(f'Locus has no valid "locus" qualifiers: {rec.name}')
+
+        loci.append(f'{locus_name} -> {serotype or "Unknown"}')
+
+    return loci, extra
+
 
 # Helper Function: Fetch DOIs from Crossref based on title search
 @st.cache_data(ttl=3600)
@@ -48,11 +85,9 @@ def fetch_ncbi_taxids(search_term):
         return []
 
     try:
-        # Encode the search string for the URL
         encoded_term = urllib.parse.quote(search_term)
         url = f"https://api.ncbi.nlm.nih.gov/datasets/v2alpha/taxonomy/taxon_suggest/{encoded_term}"
 
-        # Adding a User-Agent is good practice when hitting NCBI servers
         req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
 
         with urllib.request.urlopen(req, timeout=5) as response:
@@ -60,13 +95,11 @@ def fetch_ncbi_taxids(search_term):
 
         results = []
 
-        # If NCBI finds no matches, it returns an empty object {} instead of an array.
-        # We check for the key before trying to loop through it.
         if "sci_name_and_ids" in data:
             for item in data["sci_name_and_ids"]:
                 tax_id = item.get("tax_id")
                 sci_name = item.get("sci_name")
-                rank = item.get("rank", "Unknown").title()  # e.g., SPECIES -> Species
+                rank = item.get("rank", "Unknown").title()  
 
                 label = f"{sci_name} ({rank}) [TaxID: {tax_id}]"
                 results.append({
@@ -77,25 +110,22 @@ def fetch_ncbi_taxids(search_term):
         return results
 
     except Exception as e:
-        # Fails securely, allowing the user to manually enter info below
         return []
 
 
 # Helper Function: Fetch .gbk files from the root of the GitHub repo
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300)
 def fetch_github_gbk_files(owner, repo, branch):
     if not owner or not repo or not branch:
         return None
 
     try:
-        # No recursive flag here; looks strictly at the root directory
         url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
 
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
 
-        # Filter root items for files ending in .gbk
         gbk_files = [item['path'] for item in data.get('tree', []) if item['path'].endswith('.gbk')]
         return gbk_files
 
@@ -103,6 +133,26 @@ def fetch_github_gbk_files(owner, repo, branch):
         return None
     except Exception:
         return None
+
+# NEW Helper Function: Fetch raw database and parse it
+@st.cache_data(show_spinner=False, ttl=300)
+def fetch_and_validate_genbank(owner, repo, branch, filename):
+    if not filename:
+        return None, None, "No file provided."
+    try:
+        # Get the raw file from GitHub
+        url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{urllib.parse.quote(filename)}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            raw_data = response.read()
+            
+        # Parse using io.BytesIO to satisfy binary IO requirement
+        fh = io.BytesIO(raw_data)
+        loci, extra = parse_database(fh)
+        return loci, extra, None
+    except Exception as e:
+        return None, None, str(e)
 
 
 col1, col2, col3 = st.columns(3)
@@ -113,10 +163,8 @@ with col1:
     repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
     branch = st.text_input("Branch", value="main")
 
-    # Trigger the GitHub API lookup
     gbk_files = fetch_github_gbk_files(owner, repo, branch)
 
-    # Dynamic Validation & Dropdown
     if gbk_files is None:
         st.error("⚠️ Repository not found. Please check Owner, Repo, and Branch.")
         genbank = st.text_input("GenBank File (Manual Entry)")
@@ -129,7 +177,7 @@ with col1:
 
     organism_input = st.text_input("Search Organism Name", value="Klebsiella oxytoca")
     ncbi_options = fetch_ncbi_taxids(organism_input)
-    # Present choices dynamically
+    
     if ncbi_options:
         selected_option = st.selectbox(
             "Select Verified NCBI Taxonomy Match",
@@ -137,7 +185,7 @@ with col1:
             format_func=lambda x: x["label"]
         )
         taxon = selected_option["id"]
-        organism = selected_option["name"]  # Use official scientific name from API
+        organism = selected_option["name"] 
         st.success(f"Selected Taxon ID: {taxon}")
     else:
         st.warning("No official NCBI records found. Please enter manually:")
@@ -149,22 +197,17 @@ with col2:
     st.subheader("Biology 🦠")
     prefix = st.text_input("Prefix", value="K")
 
-    # Safe string parsing for the new keyword rule
-    # e.g., "Klebsiella oxytoca Species Complex" -> ["Klebsiella", "oxytoca", "Species", "Complex"]
     org_parts = organism.strip().split()
     genus_part = org_parts[0] if len(org_parts) > 0 else ""
     species_part = org_parts[1] if len(org_parts) > 1 else ""
 
-    # Extract letters safely (handles empty string states gracefully)
     genus_letter = genus_part[0].lower() if genus_part else ""
     species_letters = species_part[:3].lower() if species_part else ""
     clean_prefix = prefix.lower().strip()
 
-    # Calculate both dynamic suggestions
     suggested_keyword = f"{genus_letter}{species_letters}_{clean_prefix}"
     suggested_name = f"{organism.replace(' ', '_')}_{prefix}"
 
-    # Present text inputs populated with your dynamic defaults
     keyword = st.text_input("Keyword", value=suggested_keyword)
     name = st.text_input("Database Config Name", value=suggested_name)
 
@@ -190,20 +233,18 @@ with col3:
     st.subheader("Curation 📚")
     version_input = st.text_input("Version", value="0.0.0")
 
-    # Validate the input
     is_valid_version = True
     if not semver.VersionInfo.is_valid(version_input):
         st.error("⚠️ Invalid SemVer format. Must be MAJOR.MINOR.PATCH (e.g., '0.0.0').")
         is_valid_version = False
 
-    version = version_input  # Still map it to the dictionary so the preview works
+    version = version_input 
     
     contact_name = st.text_input("Contact Name", value="Kelly Wyres")
     contact_email = st.text_input("Contact Email", value="kaptive.typing@gmail.com")
     
     st.markdown("**Paper DOIs**")
     
-    # DOI Search Box
     search_query = st.text_input("Search Paper by Title (Crossref)")
     if search_query:
         api_results = fetch_crossref_dois(search_query)
@@ -215,17 +256,15 @@ with col3:
                 format_func=lambda x: f"{x['title']} (DOI: {x['doi']})"
             )
             
-            # The Add Button
             if st.button("➕ Add to Database DOIs"):
                 if selected_paper['doi'] not in st.session_state.doi_list:
                     st.session_state.doi_list.append(selected_paper['doi'])
-                    st.rerun() # instantly updates the preview below
+                    st.rerun() 
                 else:
                     st.warning("This DOI is already in your list.")
         else:
             st.warning("No papers found on Crossref.")
 
-    # Manual Entry alternative
     with st.expander("Manually add a DOI (if not on Crossref)"):
         manual_doi = st.text_input("Enter exact DOI:")
         if st.button("➕ Add Manual DOI") and manual_doi:
@@ -233,17 +272,49 @@ with col3:
                 st.session_state.doi_list.append(manual_doi)
                 st.rerun()
 
-    # Display the current "Shopping Cart" of DOIs
     if st.session_state.doi_list:
         for i, current_doi in enumerate(st.session_state.doi_list):
             c1, c2 = st.columns([5, 1])
             c1.code(current_doi)
-            # Remove button
             if c2.button("❌", key=f"remove_doi_{i}"):
                 st.session_state.doi_list.pop(i)
                 st.rerun()
     else:
         st.info("No DOIs added. Array will default to ['TBD'].")
+
+# --- NEW: Database Validation Section ---
+st.divider()
+st.subheader("Database Validation ✅")
+
+# State variables for validation success locking
+is_db_valid = False
+
+if genbank:
+    with st.spinner("Fetching and validating GenBank file from GitHub..."):
+        loci, extra, err = fetch_and_validate_genbank(owner, repo, branch, genbank)
+        
+        if err:
+            st.error(f"⚠️ **Validation Failed:** {err}")
+        else:
+            is_db_valid = True
+            st.success(f"Database valid! Successfully parsed **{len(loci)}** loci and **{len(extra)}** extra genes.")
+            
+            val_col1, val_col2 = st.columns(2)
+            with val_col1:
+                with st.expander("View Loci Details"):
+                    if loci:
+                        st.write(loci)
+                    else:
+                        st.info("No loci found.")
+            with val_col2:
+                with st.expander("View Extra Genes Details"):
+                    if extra:
+                        st.write(extra)
+                    else:
+                        st.info("No extra genes found.")
+else:
+    st.info("Select or enter a GenBank file above to validate.")
+
 
 # Build the Data Dictionary
 metadata = {
@@ -272,22 +343,27 @@ toml_string = toml.dumps(metadata)
 st.subheader("Live Preview")
 st.code(toml_string, language="toml")
 
-# Determine the dynamic download filename
-download_filename = "metadata.toml"  # Default fallback
+download_filename = "metadata.toml" 
 if genbank and genbank.endswith('.gbk'):
     download_filename = genbank.replace('.gbk', '.toml')
 
-# Download Button
-if is_valid_version:
+# Download Button Logic
+if is_valid_version and is_db_valid:
     st.download_button(
         label=f"⬇️ Download {download_filename}",
         data=toml_string,
         file_name=download_filename,
         mime="application/toml"
     )
-else:
+elif not is_valid_version:
     st.button(
         label=f"⬇️ Download {download_filename}",
         disabled=True,
         help="Please fix the version formatting error above to enable downloads."
+    )
+else:
+    st.button(
+        label=f"⬇️ Download {download_filename}",
+        disabled=True,
+        help="Download disabled. Please ensure the selected GenBank database is valid."
     )
