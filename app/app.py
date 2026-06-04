@@ -236,7 +236,7 @@ with col1:
     
     if ncbi_options:
         selected_option = st.selectbox(
-            "Select Verified NCBI Taxonomy Match 🌳",
+            "Select NCBI Taxonomy Match 🌳",
             options=ncbi_options,
             format_func=lambda x: x["label"]
         )
@@ -280,9 +280,9 @@ with col2:
     if antigen == "Other":
         antigen = st.text_input("Specify Antigen")
 
-    pathway = st.selectbox("Pathway", ["Wzx/Wzy-dependent", "ABC transporter", "Synthase-dependent", "Other"])
+    pathway = st.selectbox("Pathway 🧪", ["Wzx/Wzy-dependent", "ABC transporter", "Synthase-dependent", "Other"])
     if pathway == "Other":
-        pathway = st.text_input("Specify Pathway 🧪")
+        pathway = st.text_input("Specify Pathway")
 
 
 with col3:
