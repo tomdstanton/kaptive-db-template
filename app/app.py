@@ -329,7 +329,7 @@ with col1:
             organism = st.text_input("Organism Custom Name", value=organism_input)
             taxon = st.number_input("Taxon ID (Manual)", value=571, step=1)
     else:
-        st.info("👆 Enter an organism name to search the NCBI taxonomy.")
+        st.info("👆 Enter an organism name to search the [NCBI taxonomy](https://www.ncbi.nlm.nih.gov/taxonomy).")
 
 
 with col2:
@@ -418,7 +418,7 @@ with col3:
     st.markdown("---")
     st.markdown("**Paper DOIs 📄**")
     
-    search_query = st.text_input("Search Paper by Title (Crossref)")
+    search_query = st.text_input("Search Paper by Title ([Crossref](https://www.crossref.org/)")
     if search_query:
         api_results = fetch_crossref_dois(search_query)
         
