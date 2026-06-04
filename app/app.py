@@ -6,56 +6,85 @@ import json
 import semver
 import io
 import base64
+import fnmatch
 from re import compile as re_compile
 from gb_io import iter as GenbankIterator
 
 st.set_page_config(page_title="Kaptive Database Validator", layout="centered")
-st.title("🧬🦠💉 Kaptive Database Validator")
-st.image("https://github.com/klebgenomics/Kaptive/blob/master/docs/assets/logo.png?raw=true", width=150)
-st.markdown("Fill out the fields below to validate your [Kaptive](https://github.com/klebgenomics/Kaptive) database and generate the metadata file.\nNote that you will need a [Github account](https://github.com/signup) to host your database.")
 
-# Initialize persistent storage for DOIs and Contacts
+# --- Header with Right-Aligned Logo ---
+header_col1, header_col2 = st.columns([4, 1])
+with header_col1:
+    st.title("🧬🦠💉 Kaptive Database Validator")
+    st.markdown("""
+    Fill out the fields below to validate your [Kaptive](https://github.com/klebgenomics/Kaptive) database and generate the metadata file.
+    Note that you will need a [Github account](https://github.com/signup) to host your database.
+    """)
+with header_col2:
+    st.image("https://github.com/klebgenomics/Kaptive/blob/master/docs/assets/logo.png?raw=true", width=120)
+
+# Initialize persistent storage for DOIs, Contacts, and Phenotypes
 if 'doi_list' not in st.session_state:
     st.session_state.doi_list = []
     
 if 'contact_dict' not in st.session_state:
-    # Set the default curator on initial load
     st.session_state.contact_dict = {}
 
 if 'phenotype_dict' not in st.session_state:
     st.session_state.phenotype_dict = {}
+
+# Helper Function: Wildcard Matcher
+def get_matches(pattern_str, options):
+    patterns = [p.strip() for p in pattern_str.split(',') if p.strip()]
+    matched = set()
+    for p in patterns:
+        matched.update(fnmatch.filter(options, p))
+    return sorted(list(matched))
 
 def parse_database(fh):
     _LOCUS_REGEX = re_compile(r'locus:\s?(.*)$')
     _SEROTYPE_REGEX = re_compile(r'type:\s?(.*)$')
     _EXTRA_REGEX = re_compile(r'Extra genes:\s?(.*)$')
     
-    loci, extra = [], []
+    loci, genes, extra_genes = dict(), set(), set()
     for rec in GenbankIterator(fh):
-        locus_name, serotype = None, None
-
         if not (notes := [i.value for i in rec.features[0].qualifiers if i.key == 'note']):
             raise ValueError(f'Locus has no "note" qualifiers: {rec.name}')
 
-        locus_name, serotype = None, None
+        locus_names, serotypes, extra_locus = [], [], False
         for note in notes:  # type: str
             if match := _EXTRA_REGEX.search(note):
-                locus_name = match.group(1)
-                extra.append(locus_name)
+                extra_locus = True
                 break
 
-            if not locus_name and (match := _LOCUS_REGEX.search(note)):
-                locus_name = match.group(1)
+            if match := _LOCUS_REGEX.search(note):
+                locus_names.append(match.group(1))
 
-            if not serotype and (match := _SEROTYPE_REGEX.search(note)):
-                serotype = match.group(1)
+            if match := _SEROTYPE_REGEX.search(note):
+                serotypes.append(match.group(1))
 
-        if not locus_name:
-            raise ValueError(f'Locus has no valid "locus" qualifiers: {rec.name}')
+        if not extra_locus:
+            if not locus_names:
+                raise ValueError(f'Locus has no valid "locus" qualifiers: {rec.name}')
+            if len(locus_names) > 1:
+                raise ValueError(f'Locus has multiple "locus" qualifiers: {rec.name}')
 
-        loci.append(f'{locus_name} -> {serotype or "Unknown"}')
+            locus = locus_names[0]
+            serotype = serotypes[0] if serotypes else "Unknown"
+            
+            if locus in loci:
+                raise ValueError(f'Database has multiple records for {locus}')
+            
+            loci[locus] = serotype
 
-    return loci, extra
+        gene_set = extra_genes if extra_locus else genes
+        for feat in rec.features[1:]:
+            if feat.kind == 'CDS':
+                for i in feat.qualifiers:
+                    if i.key == 'gene':
+                        gene_set.add(i.value)
+
+    return loci, genes, extra_genes
 
 
 # Helper Function: Fetch DOIs from Crossref based on title search
@@ -90,24 +119,20 @@ def fetch_crossref_dois(search_term):
 def fetch_ncbi_taxids(search_term):
     if not search_term.strip():
         return []
-
     try:
         encoded_term = urllib.parse.quote(search_term)
         url = f"https://api.ncbi.nlm.nih.gov/datasets/v2alpha/taxonomy/taxon_suggest/{encoded_term}"
-
         req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
 
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
 
         results = []
-
         if "sci_name_and_ids" in data:
             for item in data["sci_name_and_ids"]:
                 tax_id = item.get("tax_id")
                 sci_name = item.get("sci_name")
                 rank = item.get("rank", "Unknown").title()  
-
                 label = f"{sci_name} ({rank}) [TaxID: {tax_id}]"
                 results.append({
                     "label": label,
@@ -115,72 +140,54 @@ def fetch_ncbi_taxids(search_term):
                     "name": sci_name
                 })
         return results
-
     except Exception as e:
         return []
 
-# Helper Function: Fetch Repositories for a User/Org
 @st.cache_data(ttl=300)
 def fetch_github_repos(owner):
     if not owner.strip():
         return []
-    
     try:
-        # Using sort=updated to show recently active repos first
         url = f"https://api.github.com/users/{urllib.parse.quote(owner)}/repos?per_page=100&sort=updated"
         req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
-
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
-
-        # Extract just the repository names
         return [repo['name'] for repo in data]
     except Exception:
-        # Fails gracefully (e.g., user not found or rate limited)
         return []
 
 @st.cache_data(ttl=300)
 def fetch_github_branches(owner, repo):
     if not owner.strip() or not repo.strip():
         return []
-        
     try:
         url = f"https://api.github.com/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}/branches?per_page=100"
         req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
-        
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
-            
         return [branch['name'] for branch in data]
     except Exception:
         return []
 
-# Helper Function: Fetch .gbk files from the root of the GitHub repo
 @st.cache_data(ttl=300)
 def fetch_github_gbk_files(owner, repo, branch):
     if not owner or not repo or not branch:
         return None
-
     try:
-        url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}"
+        url = f"https://api.github.com/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}/git/trees/{urllib.parse.quote(branch)}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
-
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
-
-        gbk_files = [item['path'] for item in data.get('tree', []) if item['path'].endswith('.gbk')]
-        return gbk_files
-
+        return [item['path'] for item in data.get('tree', []) if item['path'].endswith('.gbk')]
     except urllib.error.HTTPError:
         return None
     except Exception:
         return None
 
-# Helper Function: Fetch raw database and parse it
 @st.cache_data(show_spinner=False, ttl=300)
 def fetch_and_validate_genbank(owner, repo, branch, filename):
     if not filename:
-        return None, None, "No file provided."
+        return None, None, None, "No file provided."
     try:
         url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{urllib.parse.quote(filename)}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
@@ -189,10 +196,10 @@ def fetch_and_validate_genbank(owner, repo, branch, filename):
             raw_data = response.read()
             
         fh = io.BytesIO(raw_data)
-        loci, extra = parse_database(fh)
-        return loci, extra, None
+        loci, genes, extra_genes = parse_database(fh)
+        return loci, genes, extra_genes, None
     except Exception as e:
-        return None, None, str(e)
+        return None, None, None, str(e)
 
 def push_to_github(owner, repo, branch, filepath, content, token, commit_message):
     api_base = f"https://api.github.com/repos/{owner}/{repo}/contents/{urllib.parse.quote(filepath)}"
@@ -202,7 +209,6 @@ def push_to_github(owner, repo, branch, filepath, content, token, commit_message
         "User-Agent": "Kaptive-Database-Validator/1.0"
     }
 
-    # Step 1: Check if file already exists to get its SHA (required for updates)
     sha = None
     get_url = f"{api_base}?ref={branch}"
     try:
@@ -211,10 +217,9 @@ def push_to_github(owner, repo, branch, filepath, content, token, commit_message
             data = json.loads(response.read().decode('utf-8'))
             sha = data.get('sha')
     except urllib.error.HTTPError as e:
-        if e.code != 404:  # 404 just means the file is new, which is fine
+        if e.code != 404:  
             return False, f"Error checking existing file: {e.reason}"
 
-    # Step 2: Prepare payload
     encoded_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
     payload = {
         "message": commit_message,
@@ -224,7 +229,6 @@ def push_to_github(owner, repo, branch, filepath, content, token, commit_message
     if sha:
         payload["sha"] = sha
 
-    # Step 3: Execute PUT request
     try:
         req = urllib.request.Request(
             api_base, 
@@ -244,19 +248,17 @@ def push_to_github(owner, repo, branch, filepath, content, token, commit_message
         return False, f"An error occurred: {str(e)}"
 
 
+# --- Main UI Blocks ---
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.subheader("Database 💽")
     owner = st.text_input("Owner 🆔")
 
-    # Initialize empty variables to prevent reference errors if owner is empty
     repos, repo, branches, branch, gbk_files, genbank = [], "", [], "", [], ""
     
     if owner:
-        # Fetching repositories dynamically based on the owner input
         repos = fetch_github_repos(owner)
-        
         if repos:
             default_index = 0
             repo = st.selectbox("Repo 📂", options=repos, index=default_index)
@@ -266,7 +268,6 @@ with col1:
 
         if repo:
             branches = fetch_github_branches(owner, repo)
-            
             if branches:
                 default_branch_index = 0
                 if "main" in branches:
@@ -281,7 +282,6 @@ with col1:
 
             if branch:
                 gbk_files = fetch_github_gbk_files(owner, repo, branch)
-
                 if gbk_files is None:
                     st.error("⚠️ Repository or branch not found.")
                     genbank = st.text_input("GenBank File (Manual Entry)")
@@ -294,15 +294,12 @@ with col1:
     else:
         st.info("👆 Please enter a GitHub username to load repositories.")
 
-    # Dynamically determine the default organism based on the GenBank filename
     default_org_name = ""
     if genbank and genbank.endswith('.gbk'):
-        # Strip paths (if any) and extension: e.g., "folder/Klebsiella_oxytoca_K.gbk" -> "Klebsiella_oxytoca_K"
         filename_only = genbank.split('/')[-1]
         filename_no_ext = filename_only.replace('.gbk', '')
         name_parts = filename_no_ext.split('_')
         
-        # Take the first two words separated by underscores
         if len(name_parts) >= 2:
             default_org_name = f"{name_parts[0]} {name_parts[1]}"
         elif len(name_parts) == 1:
@@ -310,11 +307,9 @@ with col1:
 
     organism_input = st.text_input("Search Organism Name 🧫", value=default_org_name)
     
-    # Initialize defaults
     taxon = 0
     organism = ""
     
-    # Only fire the NCBI API if there's an actual search term
     if organism_input:
         ncbi_options = fetch_ncbi_taxids(organism_input)
         
@@ -339,11 +334,9 @@ with col2:
     st.subheader("Biology 🦠")
     prefix = st.text_input("Prefix")
 
-    # Initialize to empty strings so the downstream dictionary doesn't break
     keyword = ""
     name = ""
 
-    # Cascade the naming inputs so they only appear when prefix AND organism exist
     if prefix and organism:
         org_parts = organism.strip().split()
         genus_part = org_parts[0] if len(org_parts) > 0 else ""
@@ -359,7 +352,6 @@ with col2:
         keyword = st.text_input("Database Keyword (for CLI) 🔑", value=suggested_keyword)
         name = st.text_input("Database Name (for reporting) 📋", value=suggested_name)
     else:
-        # Provide targeted feedback depending on what is missing
         if not organism:
             st.info("👆 Please select an organism in the Database column to generate naming suggestions.")
         else:
@@ -367,11 +359,7 @@ with col2:
 
     id_threshold = st.slider(
         "Homolog Amino-Acid Identity Threshold (%)", 
-        min_value=0.0, 
-        max_value=100.0, 
-        value=82.5, 
-        step=0.5, 
-        format="%.1f"
+        min_value=0.0, max_value=100.0, value=82.5, step=0.5, format="%.1f"
     )
     
     antigen = st.selectbox("Antigen 💉", ["Capsular polysaccharide", "Outer-core-lipopolysaccharide", "Other"])
@@ -394,11 +382,9 @@ with col3:
 
     version = version_input 
     
-    # --- Dynamic Multiple Contacts Logic ---
     st.markdown("**Curators / Contacts 🧑‍🔬**")
     
     if st.session_state.contact_dict:
-        # Cast to list to avoid runtime errors if dictionary changes size
         for c_name, c_email in list(st.session_state.contact_dict.items()):
             c1, c2 = st.columns([5, 1])
             c1.code(f"{c_name} <{c_email}>")
@@ -458,22 +444,25 @@ with col3:
     else:
         st.info("No DOIs added. Array will default to ['TBD'].")
 
+# --- Database Validation Section ---
 st.divider()
 st.subheader("Database Validation ✅")
 
 is_db_valid = False
+loci, genes, extra_genes = {}, set(), set() # Define globally for the logic block downstream
 
 if genbank:
     with st.spinner("Fetching and validating GenBank file from GitHub..."):
-        loci, extra, err = fetch_and_validate_genbank(owner, repo, branch, genbank)
+        res_loci, res_genes, res_extra, err = fetch_and_validate_genbank(owner, repo, branch, genbank)
         
         if err:
             st.error(f"⚠️ **Validation Failed:** {err}")
         else:
             is_db_valid = True
-            st.success(f"Database valid! Successfully parsed **{len(loci)}** loci and **{len(extra)}** extra genes.")
+            loci, genes, extra_genes = res_loci, res_genes, res_extra
+            st.success(f"Database valid! Successfully parsed **{len(loci)}** loci, **{len(genes)}** genes, and **{len(extra_genes)}** extra genes.")
             
-            val_col1, val_col2 = st.columns(2)
+            val_col1, val_col2, val_col3 = st.columns(3)
             with val_col1:
                 with st.expander("View Loci Details"):
                     if loci:
@@ -481,14 +470,22 @@ if genbank:
                     else:
                         st.info("No loci found.")
             with val_col2:
+                with st.expander("View Genes Details"):
+                    if genes:
+                        st.write(sorted(list(genes)))
+                    else:
+                        st.info("No genes found.")
+            with val_col3:
                 with st.expander("View Extra Genes Details"):
-                    if extra:
-                        st.write(extra)
+                    if extra_genes:
+                        st.write(sorted(list(extra_genes)))
                     else:
                         st.info("No extra genes found.")
 else:
     st.info("Select or enter a GenBank file above to validate.")
 
+
+# --- Phenotype Logic Section ---
 st.divider()
 st.subheader("Phenotype Logic 🧬🧮")
 st.markdown("Define complex phenotypic application rules based on loci match patterns and specific gene presence or absence. Wildcards (`*`) are supported.")
@@ -497,7 +494,6 @@ if st.session_state.phenotype_dict:
     for p_name, p_logic in list(st.session_state.phenotype_dict.items()):
         c1, c2 = st.columns([9, 1])
         
-        # Build a readable string to display the logic overview
         logic_parts = [f"Loci: `{p_logic.get('loci', [])}`"]
         if 'inactive_genes' in p_logic:
             logic_parts.append(f"Inactive: `{p_logic['inactive_genes']}`")
@@ -514,16 +510,31 @@ if st.session_state.phenotype_dict:
 else:
     st.info("No phenotype logic defined. (Optional)")
 
-with st.expander("➕ Add Phenotype Logic"):
+with st.expander("➕ Add Phenotype Logic", expanded=True):
     p_name = st.text_input("Phenotype Name (e.g., 'Capsule null', 'O2β')")
     
     p_col1, p_col2 = st.columns(2)
     with p_col1:
         p_loci = st.text_input("Loci", help="Comma-separated list (e.g., 'KL*', 'OL2α*'). Applies to these base loci.")
+        # Real-time Wildcard Preview
+        if is_db_valid and p_loci:
+            m_loci = get_matches(p_loci, loci.keys())
+            st.caption(f"**Matches ({len(m_loci)}):** {', '.join(m_loci) if m_loci else 'None'}")
+            
         p_priority = st.number_input("Priority", value=50, step=1, help="Order of logic application. Higher/lower numbers determine precedence. Default is 50.")
+        
     with p_col2:
         p_inactive = st.text_input("Inactive Genes", help="Comma-separated list. Phenotype applied if ANY of these genes are inactivated.")
+        # Real-time Wildcard Preview
+        if is_db_valid and p_inactive:
+            m_inactive = get_matches(p_inactive, genes)
+            st.caption(f"**Matches ({len(m_inactive)}):** {', '.join(m_inactive) if m_inactive else 'None'}")
+            
         p_extra = st.text_input("Extra Genes", help="Comma-separated list. Phenotype applied if ALL of these genes are present.")
+        # Real-time Wildcard Preview
+        if is_db_valid and p_extra:
+            m_extra = get_matches(p_extra, extra_genes)
+            st.caption(f"**Matches ({len(m_extra)}):** {', '.join(m_extra) if m_extra else 'None'}")
         
     if st.button("Add Logic Rule"):
         if not p_name.strip() or not p_loci.strip():
@@ -537,14 +548,14 @@ with st.expander("➕ Add Phenotype Logic"):
             if p_extra.strip():
                 new_rule["extra_genes"] = [x.strip() for x in p_extra.split(",") if x.strip()]
             
-            # Only inject priority into the TOML if it diverges from the 50 default to keep it clean
             if p_priority != 50:
                 new_rule["priority"] = int(p_priority)
                 
             st.session_state.phenotype_dict[p_name.strip()] = new_rule
             st.rerun()
 
-# Build the Data Dictionary
+
+# --- Build & Export Section ---
 metadata = {
     "name": name,
     "keyword": keyword,
@@ -560,27 +571,26 @@ metadata = {
     "owner": owner,
     "repo": repo,
     "branch": branch,
-    # --- Assigning the new contact dict ---
     "contact": st.session_state.contact_dict if len(st.session_state.contact_dict) > 0 else {"TBD": "TBD"}
 }
 
-st.divider()
+if st.session_state.phenotype_dict:
+    metadata["phenotype_logic"] = st.session_state.phenotype_dict
 
-# Generate TOML
+st.divider()
 toml_string = toml.dumps(metadata)
+
 download_filename = "metadata.toml" 
 if genbank and genbank.endswith('.gbk'):
     download_filename = genbank.split('/')[-1].replace('.gbk', '.toml')
 
 st.subheader("Export Options 🚀")
-
 export_col1, export_col2 = st.columns([1, 1])
 
 with export_col1:
     st.markdown("**Live Preview**")
     st.code(toml_string, language="toml")
     
-    # Download Button Logic
     if is_valid_version and is_db_valid:
         st.download_button(
             label=f"⬇️ Download {download_filename}",
@@ -608,13 +618,9 @@ with export_col2:
         if st.button("🚀 Commit to GitHub", disabled=not can_push, type="primary", use_container_width=True):
             with st.spinner(f"Pushing to {branch}..."):
                 success, message = push_to_github(
-                    owner=owner, 
-                    repo=repo, 
-                    branch=branch, 
-                    filepath=gh_filepath, 
-                    content=toml_string, 
-                    token=gh_token, 
-                    commit_message=gh_commit_msg
+                    owner=owner, repo=repo, branch=branch, 
+                    filepath=gh_filepath, content=toml_string, 
+                    token=gh_token, commit_message=gh_commit_msg
                 )
                 
                 if success:
