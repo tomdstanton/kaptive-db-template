@@ -247,60 +247,89 @@ with col1:
     st.markdown("**Start by entering your Github Username 👇**")
     owner = st.text_input("Owner 🆔")
 
-    # Fetching repositories dynamically based on the owner input
-    repos = fetch_github_repos(owner)
+    # Initialize empty variables to prevent reference errors if owner is empty
+    repos, repo, branches, branch, gbk_files, genbank = [], "", [], "", [], ""
     
-    if repos:
-        # Keep original workflow seamless by selecting standard repo by default if it exists
-        default_index = 0
-        repo = st.selectbox("Repo 📂", options=repos, index=default_index)
-    else:
-        st.warning("⚠️ Could not fetch repositories. Please enter manually.")
-        repo = st.text_input("Repo 📂")
+    if owner:
+        # Fetching repositories dynamically based on the owner input
+        repos = fetch_github_repos(owner)
+        
+        if repos:
+            default_index = 0
+            repo = st.selectbox("Repo 📂", options=repos, index=default_index)
+        else:
+            st.warning("⚠️ Could not fetch repositories. Please enter manually.")
+            repo = st.text_input("Repo 📂")
 
-    branches = fetch_github_branches(owner, repo)
-    
-    if branches:
-        # Default to 'main', fallback to 'master', otherwise just the first branch
-        default_branch_index = 0
-        if "main" in branches:
-            default_branch_index = branches.index("main")
-        elif "master" in branches:
-            default_branch_index = branches.index("master")
+        if repo:
+            branches = fetch_github_branches(owner, repo)
             
-        branch = st.selectbox("Branch 🪾", options=branches, index=default_branch_index)
+            if branches:
+                default_branch_index = 0
+                if "main" in branches:
+                    default_branch_index = branches.index("main")
+                elif "master" in branches:
+                    default_branch_index = branches.index("master")
+                    
+                branch = st.selectbox("Branch 🪾", options=branches, index=default_branch_index)
+            else:
+                st.warning("⚠️ Could not fetch branches. Please enter manually.")
+                branch = st.text_input("Branch 🪾", value="main")
+
+            if branch:
+                gbk_files = fetch_github_gbk_files(owner, repo, branch)
+
+                if gbk_files is None:
+                    st.error("⚠️ Repository or branch not found.")
+                    genbank = st.text_input("GenBank File (Manual Entry)")
+                elif len(gbk_files) == 0:
+                    st.warning(f"No '.gbk' files found in {owner}/{repo} on branch '{branch}'.")
+                    genbank = st.text_input("GenBank File (Manual Entry) 🗂️")
+                else:
+                    st.success(f"Found {len(gbk_files)} GenBank file(s)!")
+                    genbank = st.selectbox("Select GenBank File 🗂️", options=gbk_files)
     else:
-        st.warning("⚠️ Could not fetch branches. Please enter manually.")
-        branch = st.text_input("Branch 🪾", value="main")
+        st.info("👆 Please enter a GitHub username to load repositories.")
 
-    gbk_files = fetch_github_gbk_files(owner, repo, branch)
+    # Dynamically determine the default organism based on the GenBank filename
+    default_org_name = ""
+    if genbank and genbank.endswith('.gbk'):
+        # Strip paths (if any) and extension: e.g., "folder/Klebsiella_oxytoca_K.gbk" -> "Klebsiella_oxytoca_K"
+        filename_only = genbank.split('/')[-1]
+        filename_no_ext = filename_only.replace('.gbk', '')
+        name_parts = filename_no_ext.split('_')
+        
+        # Take the first two words separated by underscores
+        if len(name_parts) >= 2:
+            default_org_name = f"{name_parts[0]} {name_parts[1]}"
+        elif len(name_parts) == 1:
+            default_org_name = name_parts[0]
 
-    if gbk_files is None:
-        st.error("⚠️ Repository or branch not found.")
-        genbank = st.text_input("GenBank File (Manual Entry)")
-    elif len(gbk_files) == 0:
-        st.warning(f"No '.gbk' files found in {owner}/{repo} on branch '{branch}'.")
-        genbank = st.text_input("GenBank File (Manual Entry) 🗂️")
-    else:
-        st.success(f"Found {len(gbk_files)} GenBank file(s)!")
-        genbank = st.selectbox("Select GenBank File 🗂️", options=gbk_files)
-
-    organism_input = st.text_input("Search Organism Name 🧫")
-    ncbi_options = fetch_ncbi_taxids(organism_input)
+    organism_input = st.text_input("Search Organism Name 🧫", value=default_org_name)
     
-    if ncbi_options:
-        selected_option = st.selectbox(
-            "Select NCBI Taxonomy Match 🌳",
-            options=ncbi_options,
-            format_func=lambda x: x["label"]
-        )
-        taxon = selected_option["id"]
-        organism = selected_option["name"] 
-        st.success(f"Selected Taxon ID: {taxon}")
+    # Initialize defaults
+    taxon = 0
+    organism = ""
+    
+    # Only fire the NCBI API if there's an actual search term
+    if organism_input:
+        ncbi_options = fetch_ncbi_taxids(organism_input)
+        
+        if ncbi_options:
+            selected_option = st.selectbox(
+                "Select NCBI Taxonomy Match 🌳",
+                options=ncbi_options,
+                format_func=lambda x: x["label"]
+            )
+            taxon = selected_option["id"]
+            organism = selected_option["name"] 
+            st.success(f"Selected Taxon ID: {taxon}")
+        else:
+            st.warning("No official NCBI records found. Please enter manually:")
+            organism = st.text_input("Organism Custom Name", value=organism_input)
+            taxon = st.number_input("Taxon ID (Manual)", value=571, step=1)
     else:
-        st.warning("No official NCBI records found. Please enter manually:")
-        organism = st.text_input("Organism Custom Name", value=organism_input)
-        taxon = st.number_input("Taxon ID (Manual)", value=571, step=1)
+        st.info("👆 Enter an organism name to search the NCBI taxonomy.")
 
 
 with col2:
@@ -316,8 +345,8 @@ with col2:
     species_letters = species_part[:3].lower() if species_part else ""
     clean_prefix = prefix.lower().strip()
 
-    suggested_keyword = f"{genus_letter}{species_letters}_{clean_prefix}"
-    suggested_name = f"{organism.replace(' ', '_')}_{prefix}"
+    suggested_keyword = f"{genus_letter}{species_letters}_{clean_prefix}" if organism else ""
+    suggested_name = f"{organism.replace(' ', '_')}_{prefix}" if organism else ""
 
     keyword = st.text_input("Keyword", value=suggested_keyword)
     name = st.text_input("Database Config Name", value=suggested_name)
@@ -473,7 +502,7 @@ st.divider()
 toml_string = toml.dumps(metadata)
 download_filename = "metadata.toml" 
 if genbank and genbank.endswith('.gbk'):
-    download_filename = genbank.replace('.gbk', '.toml')
+    download_filename = genbank.split('/')[-1].replace('.gbk', '.toml')
 
 st.subheader("Export Options 🚀")
 
