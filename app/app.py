@@ -16,9 +16,10 @@ st.markdown("Fill out the fields below to validate your Kaptive database and gen
 # Initialize persistent storage for DOIs and Contacts
 if 'doi_list' not in st.session_state:
     st.session_state.doi_list = []
+    
 if 'contact_dict' not in st.session_state:
     # Set the default curator on initial load
-    st.session_state.contact_dict = {"Kelly Wyres": "kaptive.typing@gmail.com"}
+    st.session_state.contact_dict = {}
 
 def parse_database(fh):
     _LOCUS_REGEX = re_compile(r'locus:\s?(.*)$')
@@ -244,18 +245,18 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.subheader("Database 💽")
     st.markdown("**Start by entering your Github Username 👇**")
-    owner = st.text_input("Owner 🆔", value="klebgenomics")
+    owner = st.text_input("Owner 🆔")
 
     # Fetching repositories dynamically based on the owner input
     repos = fetch_github_repos(owner)
     
     if repos:
         # Keep original workflow seamless by selecting standard repo by default if it exists
-        default_index = repos.index("KoSC-surface-antigen-loci") if "KoSC-surface-antigen-loci" in repos else 0
+        default_index = 0
         repo = st.selectbox("Repo 📂", options=repos, index=default_index)
     else:
         st.warning("⚠️ Could not fetch repositories. Please enter manually.")
-        repo = st.text_input("Repo 📂", value="KoSC-surface-antigen-loci")
+        repo = st.text_input("Repo 📂")
 
     branches = fetch_github_branches(owner, repo)
     
@@ -284,7 +285,7 @@ with col1:
         st.success(f"Found {len(gbk_files)} GenBank file(s)!")
         genbank = st.selectbox("Select GenBank File 🗂️", options=gbk_files)
 
-    organism_input = st.text_input("Search Organism Name 🧫", value="Klebsiella oxytoca")
+    organism_input = st.text_input("Search Organism Name 🧫")
     ncbi_options = fetch_ncbi_taxids(organism_input)
     
     if ncbi_options:
@@ -304,8 +305,8 @@ with col1:
 
 with col2:
     st.subheader("Biology 🦠")
-    st.markdown("**Start by entering an antigen prefix👇**")
-    prefix = st.text_input("Prefix", value="K")
+    st.markdown("**Start by entering an antigen prefix (e.g. 'K') 👇**")
+    prefix = st.text_input("Prefix")
 
     org_parts = organism.strip().split()
     genus_part = org_parts[0] if len(org_parts) > 0 else ""
@@ -330,7 +331,7 @@ with col2:
         format="%.1f"
     )
     
-    antigen = st.selectbox("Antigen 💉", ["Capsular polysaccharide", "O antigen", "Other"])
+    antigen = st.selectbox("Antigen 💉", ["Capsular polysaccharide", "Outer-core-lipopolysaccharide", "Other"])
     if antigen == "Other":
         antigen = st.text_input("Specify Antigen")
 
