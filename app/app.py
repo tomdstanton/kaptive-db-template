@@ -15,7 +15,7 @@ st.set_page_config(page_title="Kaptive Database Validator", layout="centered")
 # --- Header with Right-Aligned Logo ---
 header_col1, header_col2 = st.columns([4, 1])
 with header_col1:
-    st.title("🧬🦠💉 Kaptive Database Validator")
+    st.title("Kaptive Database Validator")
     st.markdown("""
     Fill out the fields below to validate your [Kaptive](https://github.com/klebgenomics/Kaptive) database and generate the metadata file.
     Note that you will need a [Github account](https://github.com/signup) to host your database.
