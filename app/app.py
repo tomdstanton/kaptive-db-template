@@ -11,6 +11,7 @@ from gb_io import iter as GenbankIterator
 
 st.set_page_config(page_title="Kaptive Database Validator", layout="centered")
 st.title("🧬🦠💉 Kaptive Database Validator")
+st.image("https://github.com/klebgenomics/Kaptive/blob/master/docs/assets/logo.png?raw=true", width=150)
 st.markdown("""
 Fill out the fields below to validate your [Kaptive](https://github.com/klebgenomics/Kaptive) database and generate the metadata file.
 Note that you will need a [Github account](https://github.com/signup) to host your database.
