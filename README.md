@@ -5,7 +5,7 @@
 # Decentralised _in silico_ serotyping databases
 *A template repo for curating [Kaptive](https://github.com/klebgenomics/Kaptive/) databases*
 
-[![Streamlit App](https://img.shields.io/badge/Streamlit-%23FE4B4B.svg?logo=streamlit&logoColor=white)](https://kaptive-metadata.streamlit.app/)
+[![Streamlit App](https://img.shields.io/badge/Streamlit-%23FE4B4B.svg?logo=streamlit&logoColor=white)](https://kaptive-database-validator.streamlit.app/)
 [![Release Database](https://github.com/tomdstanton/kaptive-db-template/actions/workflows/release.yml/badge.svg)](https://github.com/tomdstanton/kaptive-db-template/actions/workflows/release.yml)
 
 ## How to use 👉
@@ -48,7 +48,7 @@ phenotype logic here too! Whilst this is still a work-in-progress, here is how w
 1. Loci are defined by the "loci" field - here you can choose the specific loci the logic applies to.
 
 ### App 💫
-We have created a simple [Streamlit app](https://kaptive-metadata.streamlit.app/) to help you generate the metadata any database in your repo!
+We have created a simple [Streamlit app](https://kaptive-database-validator.streamlit.app/) to help you generate the metadata any database in your repo!
 
 ## Database Versioning & Release Workflow 🚀
 This repository uses a fully automated Continuous Integration / Continuous Deployment (CI/CD) pipeline to manage database versions.
