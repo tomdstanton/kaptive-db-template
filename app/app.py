@@ -5,6 +5,7 @@ import urllib.parse
 import json
 import semver
 import io
+import base64
 from re import compile as re_compile
 from gb_io import iter as GenbankIterator
 
@@ -184,6 +185,55 @@ def fetch_and_validate_genbank(owner, repo, branch, filename):
         return loci, extra, None
     except Exception as e:
         return None, None, str(e)
+
+def push_to_github(owner, repo, branch, filepath, content, token, commit_message):
+    api_base = f"https://api.github.com/repos/{owner}/{repo}/contents/{urllib.parse.quote(filepath)}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Kaptive-Database-Validator/1.0"
+    }
+
+    # Step 1: Check if file already exists to get its SHA (required for updates)
+    sha = None
+    get_url = f"{api_base}?ref={branch}"
+    try:
+        req = urllib.request.Request(get_url, headers=headers)
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            sha = data.get('sha')
+    except urllib.error.HTTPError as e:
+        if e.code != 404:  # 404 just means the file is new, which is fine
+            return False, f"Error checking existing file: {e.reason}"
+
+    # Step 2: Prepare payload
+    encoded_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+    payload = {
+        "message": commit_message,
+        "content": encoded_content,
+        "branch": branch
+    }
+    if sha:
+        payload["sha"] = sha
+
+    # Step 3: Execute PUT request
+    try:
+        req = urllib.request.Request(
+            api_base, 
+            data=json.dumps(payload).encode('utf-8'), 
+            headers=headers, 
+            method='PUT'
+        )
+        with urllib.request.urlopen(req) as response:
+            if response.status in [200, 201]:
+                return True, "Successfully pushed to repository!"
+            else:
+                return False, f"Unexpected status code: {response.status}"
+    except urllib.error.HTTPError as e:
+        error_msg = json.loads(e.read().decode('utf-8')).get('message', e.reason)
+        return False, f"Failed to push: {error_msg}"
+    except Exception as e:
+        return False, f"An error occurred: {str(e)}"
 
 
 col1, col2, col3 = st.columns(3)
@@ -401,23 +451,55 @@ download_filename = "metadata.toml"
 if genbank and genbank.endswith('.gbk'):
     download_filename = genbank.replace('.gbk', '.toml')
 
-# Download Button Logic
-if is_valid_version and is_db_valid:
-    st.download_button(
-        label=f"⬇️ Download {download_filename}",
-        data=toml_string,
-        file_name=download_filename,
-        mime="application/toml"
-    )
-elif not is_valid_version:
-    st.button(
-        label=f"⬇️ Download {download_filename}",
-        disabled=True,
-        help="Please fix the version formatting error above to enable downloads."
-    )
-else:
-    st.button(
-        label=f"⬇️ Download {download_filename}",
-        disabled=True,
-        help="Download disabled. Please ensure the selected GenBank database is valid."
-    )
+st.subheader("Export Options 🚀")
+
+export_col1, export_col2 = st.columns([1, 1])
+
+with export_col1:
+    st.markdown("**Live Preview**")
+    st.code(toml_string, language="toml")
+    
+    # Download Button Logic
+    if is_valid_version and is_db_valid:
+        st.download_button(
+            label=f"⬇️ Download {download_filename}",
+            data=toml_string,
+            file_name=download_filename,
+            mime="application/toml",
+            use_container_width=True
+        )
+    elif not is_valid_version:
+        st.button("⬇️ Download (Disabled - Version Error)", disabled=True, use_container_width=True)
+    else:
+        st.button("⬇️ Download (Disabled - Validation Failed)", disabled=True, use_container_width=True)
+
+with export_col2:
+    st.markdown(f"**Push to `{owner}/{repo}` ({branch})**")
+    
+    with st.container(border=True):
+        gh_filepath = st.text_input("Filepath (e.g., folder/metadata.toml)", value=download_filename)
+        gh_commit_msg = st.text_input("Commit Message", value=f"Add metadata for {organism} {prefix}-types")
+        gh_token = st.text_input("GitHub Personal Access Token (PAT)", type="password", help="Requires 'repo' scope.")
+        
+        can_push = is_valid_version and is_db_valid and gh_token and gh_filepath
+        
+        if st.button("🚀 Commit to GitHub", disabled=not can_push, type="primary", use_container_width=True):
+            with st.spinner(f"Pushing to {branch}..."):
+                success, message = push_to_github(
+                    owner=owner, 
+                    repo=repo, 
+                    branch=branch, 
+                    filepath=gh_filepath, 
+                    content=toml_string, 
+                    token=gh_token, 
+                    commit_message=gh_commit_msg
+                )
+                
+                if success:
+                    st.success(message)
+                    st.balloons()
+                else:
+                    st.error(message)
+        
+        if not gh_token:
+            st.caption("🔑 *Enter a GitHub PAT to enable direct pushing.*")
