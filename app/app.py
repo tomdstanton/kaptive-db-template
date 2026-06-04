@@ -444,13 +444,6 @@ st.divider()
 # Generate & Preview TOML
 toml_string = toml.dumps(metadata)
 
-st.subheader("Live Metadata Preview ♻️")
-st.code(toml_string, language="toml")
-
-download_filename = "metadata.toml" 
-if genbank and genbank.endswith('.gbk'):
-    download_filename = genbank.replace('.gbk', '.toml')
-
 st.subheader("Export Options 🚀")
 
 export_col1, export_col2 = st.columns([1, 1])
