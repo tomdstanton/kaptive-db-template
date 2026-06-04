@@ -11,7 +11,10 @@ from gb_io import iter as GenbankIterator
 
 st.set_page_config(page_title="Kaptive Database Validator", layout="centered")
 st.title("🧬🦠💉 Kaptive Database Validator")
-st.markdown("Fill out the fields below to validate your Kaptive database and generate the metadata file.")
+st.markdown("""
+Fill out the fields below to validate your [Kaptive](https://github.com/klebgenomics/Kaptive) database and generate the metadata file.
+Note that you will need a [Github account](https://github.com/signup) to host your database.
+""")
 
 # Initialize persistent storage for DOIs and Contacts
 if 'doi_list' not in st.session_state:
@@ -115,7 +118,7 @@ def fetch_ncbi_taxids(search_term):
     except Exception as e:
         return []
 
-# NEW Helper Function: Fetch Repositories for a User/Org
+# Helper Function: Fetch Repositories for a User/Org
 @st.cache_data(ttl=300)
 def fetch_github_repos(owner):
     if not owner.strip():
@@ -244,7 +247,6 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     st.subheader("Database 💽")
-    st.markdown("**Start by entering your Github Username 👇**")
     owner = st.text_input("Owner 🆔")
 
     # Initialize empty variables to prevent reference errors if owner is empty
@@ -334,22 +336,33 @@ with col1:
 
 with col2:
     st.subheader("Biology 🦠")
-    st.markdown("**Start by entering an antigen prefix (e.g. 'K') 👇**")
     prefix = st.text_input("Prefix")
 
-    org_parts = organism.strip().split()
-    genus_part = org_parts[0] if len(org_parts) > 0 else ""
-    species_part = org_parts[1] if len(org_parts) > 1 else ""
+    # Initialize to empty strings so the downstream dictionary doesn't break
+    keyword = ""
+    name = ""
 
-    genus_letter = genus_part[0].lower() if genus_part else ""
-    species_letters = species_part[:3].lower() if species_part else ""
-    clean_prefix = prefix.lower().strip()
+    # Cascade the naming inputs so they only appear when prefix AND organism exist
+    if prefix and organism:
+        org_parts = organism.strip().split()
+        genus_part = org_parts[0] if len(org_parts) > 0 else ""
+        species_part = org_parts[1] if len(org_parts) > 1 else ""
 
-    suggested_keyword = f"{genus_letter}{species_letters}_{clean_prefix}" if organism else ""
-    suggested_name = f"{organism.replace(' ', '_')}_{prefix}" if organism else ""
+        genus_letter = genus_part[0].lower() if genus_part else ""
+        species_letters = species_part[:3].lower() if species_part else ""
+        clean_prefix = prefix.lower().strip()
 
-    keyword = st.text_input("Keyword", value=suggested_keyword)
-    name = st.text_input("Database Config Name", value=suggested_name)
+        suggested_keyword = f"{genus_letter}{species_letters}_{clean_prefix}"
+        suggested_name = f"{organism.replace(' ', '_')}_{prefix}"
+
+        keyword = st.text_input("Keyword", value=suggested_keyword)
+        name = st.text_input("Database Config Name", value=suggested_name)
+    else:
+        # Provide targeted feedback depending on what is missing
+        if not organism:
+            st.info("👆 Please select an organism in the Database column to generate naming suggestions.")
+        else:
+            st.info("👆 Please enter an antigen prefix to generate naming suggestions.")
 
     id_threshold = st.slider(
         "ID Threshold (%)", 
