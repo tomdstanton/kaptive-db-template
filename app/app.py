@@ -22,6 +22,9 @@ if 'contact_dict' not in st.session_state:
     # Set the default curator on initial load
     st.session_state.contact_dict = {}
 
+if 'phenotype_dict' not in st.session_state:
+    st.session_state.phenotype_dict = {}
+
 def parse_database(fh):
     _LOCUS_REGEX = re_compile(r'locus:\s?(.*)$')
     _SEROTYPE_REGEX = re_compile(r'type:\s?(.*)$')
@@ -486,6 +489,60 @@ if genbank:
 else:
     st.info("Select or enter a GenBank file above to validate.")
 
+st.divider()
+st.subheader("Phenotype Logic 🧬🧮")
+st.markdown("Define complex phenotypic application rules based on loci match patterns and specific gene presence or absence. Wildcards (`*`) are supported.")
+
+if st.session_state.phenotype_dict:
+    for p_name, p_logic in list(st.session_state.phenotype_dict.items()):
+        c1, c2 = st.columns([9, 1])
+        
+        # Build a readable string to display the logic overview
+        logic_parts = [f"Loci: `{p_logic.get('loci', [])}`"]
+        if 'inactive_genes' in p_logic:
+            logic_parts.append(f"Inactive: `{p_logic['inactive_genes']}`")
+        if 'extra_genes' in p_logic:
+            logic_parts.append(f"Extra: `{p_logic['extra_genes']}`")
+        if 'priority' in p_logic:
+            logic_parts.append(f"Priority: `{p_logic['priority']}`")
+            
+        c1.info(f"**{p_name}** ➔ {' | '.join(logic_parts)}")
+        
+        if c2.button("❌", key=f"remove_pheno_{p_name}"):
+            del st.session_state.phenotype_dict[p_name]
+            st.rerun()
+else:
+    st.info("No phenotype logic defined. (Optional)")
+
+with st.expander("➕ Add Phenotype Logic"):
+    p_name = st.text_input("Phenotype Name (e.g., 'Capsule null', 'O2β')")
+    
+    p_col1, p_col2 = st.columns(2)
+    with p_col1:
+        p_loci = st.text_input("Loci", help="Comma-separated list (e.g., 'KL*', 'OL2α*'). Applies to these base loci.")
+        p_priority = st.number_input("Priority", value=50, step=1, help="Order of logic application. Higher/lower numbers determine precedence. Default is 50.")
+    with p_col2:
+        p_inactive = st.text_input("Inactive Genes", help="Comma-separated list. Phenotype applied if ANY of these genes are inactivated.")
+        p_extra = st.text_input("Extra Genes", help="Comma-separated list. Phenotype applied if ALL of these genes are present.")
+        
+    if st.button("Add Logic Rule"):
+        if not p_name.strip() or not p_loci.strip():
+            st.error("Both Phenotype Name and Loci are required.")
+        else:
+            new_rule = {
+                "loci": [x.strip() for x in p_loci.split(",") if x.strip()]
+            }
+            if p_inactive.strip():
+                new_rule["inactive_genes"] = [x.strip() for x in p_inactive.split(",") if x.strip()]
+            if p_extra.strip():
+                new_rule["extra_genes"] = [x.strip() for x in p_extra.split(",") if x.strip()]
+            
+            # Only inject priority into the TOML if it diverges from the 50 default to keep it clean
+            if p_priority != 50:
+                new_rule["priority"] = int(p_priority)
+                
+            st.session_state.phenotype_dict[p_name.strip()] = new_rule
+            st.rerun()
 
 # Build the Data Dictionary
 metadata = {
