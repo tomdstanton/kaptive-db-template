@@ -1,4 +1,4 @@
-<a href="[https://example.com](https://github.com/klebgenomics/Kaptive/)">
+<a href="[https://github.com/klebgenomics/Kaptive/](https://github.com/klebgenomics/Kaptive/)">
     <img align="right" src="https://github.com/klebgenomics/Kaptive/blob/master/docs/assets/logo.png?raw=true" alt="Kaptive" width="200">
 </a>
 
