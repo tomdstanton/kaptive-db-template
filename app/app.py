@@ -545,6 +545,7 @@ with export_col2:
     with st.container(border=True):
         gh_filepath = st.text_input("Filepath (e.g., folder/metadata.toml)", value=download_filename)
         gh_commit_msg = st.text_input("Commit Message", value=f"Add metadata for {organism} {prefix}-types")
+        st.info("🧠 You can use [conventional commits](https://github.com/tomdstanton/kaptive-db-template/tree/main#database-versioning--release-workflow-) to automatically version your database!")
         gh_token = st.text_input("GitHub Personal Access Token (PAT)", type="password", help="Requires 'repo' scope.")
         
         can_push = is_valid_version and is_db_valid and gh_token and gh_filepath
