@@ -130,6 +130,22 @@ def fetch_github_repos(owner):
         # Fails gracefully (e.g., user not found or rate limited)
         return []
 
+@st.cache_data(ttl=300)
+def fetch_github_branches(owner, repo):
+    if not owner.strip() or not repo.strip():
+        return []
+        
+    try:
+        url = f"https://api.github.com/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}/branches?per_page=100"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
+        
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            
+        return [branch['name'] for branch in data]
+    except Exception:
+        return []
+
 # Helper Function: Fetch .gbk files from the root of the GitHub repo
 @st.cache_data(ttl=300)
 def fetch_github_gbk_files(owner, repo, branch):
@@ -187,7 +203,20 @@ with col1:
         st.warning("⚠️ Could not fetch repositories. Please enter manually.")
         repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
 
-    branch = st.text_input("Branch", value="main")
+    branches = fetch_github_branches(owner, repo)
+    
+    if branches:
+        # Default to 'main', fallback to 'master', otherwise just the first branch
+        default_branch_index = 0
+        if "main" in branches:
+            default_branch_index = branches.index("main")
+        elif "master" in branches:
+            default_branch_index = branches.index("master")
+            
+        branch = st.selectbox("Branch", options=branches, index=default_branch_index)
+    else:
+        st.warning("⚠️ Could not fetch branches. Please enter manually.")
+        branch = st.text_input("Branch", value="main")
 
     gbk_files = fetch_github_gbk_files(owner, repo, branch)
 
