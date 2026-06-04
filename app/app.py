@@ -363,7 +363,7 @@ with col2:
             st.info("👆 Please enter an antigen prefix to generate naming suggestions.")
 
     id_threshold = st.slider(
-        "ID Threshold (%)", 
+        "Homolog Amino-Acid Identity Threshold (%)", 
         min_value=0.0, 
         max_value=100.0, 
         value=82.5, 
