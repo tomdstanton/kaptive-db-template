@@ -441,8 +441,11 @@ metadata = {
 
 st.divider()
 
-# Generate & Preview TOML
+# Generate TOML
 toml_string = toml.dumps(metadata)
+download_filename = "metadata.toml" 
+if genbank and genbank.endswith('.gbk'):
+    download_filename = genbank.replace('.gbk', '.toml')
 
 st.subheader("Export Options 🚀")
 
