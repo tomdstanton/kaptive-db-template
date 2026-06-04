@@ -189,8 +189,9 @@ def fetch_and_validate_genbank(owner, repo, branch, filename):
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.subheader("Database 📂")
-    owner = st.text_input("Owner", value="klebgenomics")
+    st.subheader("Database 💽")
+    st.markdown("**Start by entering your Github Username 👇**")
+    owner = st.text_input("Owner 🆔", value="klebgenomics")
 
     # Fetching repositories dynamically based on the owner input
     repos = fetch_github_repos(owner)
@@ -198,10 +199,10 @@ with col1:
     if repos:
         # Keep original workflow seamless by selecting standard repo by default if it exists
         default_index = repos.index("KoSC-surface-antigen-loci") if "KoSC-surface-antigen-loci" in repos else 0
-        repo = st.selectbox("Repo", options=repos, index=default_index)
+        repo = st.selectbox("Repo 📂", options=repos, index=default_index)
     else:
         st.warning("⚠️ Could not fetch repositories. Please enter manually.")
-        repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
+        repo = st.text_input("Repo 📂", value="KoSC-surface-antigen-loci")
 
     branches = fetch_github_branches(owner, repo)
     
@@ -213,10 +214,10 @@ with col1:
         elif "master" in branches:
             default_branch_index = branches.index("master")
             
-        branch = st.selectbox("Branch", options=branches, index=default_branch_index)
+        branch = st.selectbox("Branch 🪾", options=branches, index=default_branch_index)
     else:
         st.warning("⚠️ Could not fetch branches. Please enter manually.")
-        branch = st.text_input("Branch", value="main")
+        branch = st.text_input("Branch 🪾", value="main")
 
     gbk_files = fetch_github_gbk_files(owner, repo, branch)
 
@@ -225,17 +226,17 @@ with col1:
         genbank = st.text_input("GenBank File (Manual Entry)")
     elif len(gbk_files) == 0:
         st.warning(f"No '.gbk' files found in {owner}/{repo} on branch '{branch}'.")
-        genbank = st.text_input("GenBank File (Manual Entry)")
+        genbank = st.text_input("GenBank File (Manual Entry) 🗂️")
     else:
         st.success(f"Found {len(gbk_files)} GenBank file(s)!")
-        genbank = st.selectbox("Select GenBank File", options=gbk_files)
+        genbank = st.selectbox("Select GenBank File 🗂️", options=gbk_files)
 
-    organism_input = st.text_input("Search Organism Name", value="Klebsiella oxytoca")
+    organism_input = st.text_input("Search Organism Name 🧫", value="Klebsiella oxytoca")
     ncbi_options = fetch_ncbi_taxids(organism_input)
     
     if ncbi_options:
         selected_option = st.selectbox(
-            "Select Verified NCBI Taxonomy Match",
+            "Select Verified NCBI Taxonomy Match 🌳",
             options=ncbi_options,
             format_func=lambda x: x["label"]
         )
@@ -275,13 +276,13 @@ with col2:
         format="%.1f"
     )
     
-    antigen = st.selectbox("Antigen", ["Capsular polysaccharide", "O antigen", "Other"])
+    antigen = st.selectbox("Antigen 💉", ["Capsular polysaccharide", "O antigen", "Other"])
     if antigen == "Other":
         antigen = st.text_input("Specify Antigen")
 
     pathway = st.selectbox("Pathway", ["Wzx/Wzy-dependent", "ABC transporter", "Synthase-dependent", "Other"])
     if pathway == "Other":
-        pathway = st.text_input("Specify Pathway")
+        pathway = st.text_input("Specify Pathway 🧪")
 
 
 with col3:
@@ -295,7 +296,7 @@ with col3:
 
     version = version_input 
     
-    contact_name = st.text_input("Contact Name", value="Kelly Wyres")
+    contact_name = st.text_input("Contact Name 🧑‍🔬", value="Kelly Wyres")
     contact_email = st.text_input("Contact Email", value="kaptive.typing@gmail.com")
     
     st.markdown("**Paper DOIs**")
