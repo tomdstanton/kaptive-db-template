@@ -4,13 +4,13 @@ import urllib.request
 import urllib.parse
 import json
 import semver
-import io  # <-- Added for BytesIO
+import io
 from re import compile as re_compile
 from gb_io import iter as GenbankIterator
 
-st.set_page_config(page_title="Kaptive Metadata Generator", layout="centered")
-st.title("🧬 Kaptive Metadata Generator")
-st.markdown("Fill out the fields below to generate your Kaptive database `metadata.toml` file.")
+st.set_page_config(page_title="Kaptive Database Validator", layout="centered")
+st.title("🧬🦠💉 Kaptive Database Validator")
+st.markdown("Fill out the fields below to validate your Kaptive database and generate the metadata file.")
 
 # Initialize persistent storage for DOIs
 if 'doi_list' not in st.session_state:
@@ -26,7 +26,6 @@ def parse_database(fh):
         locus_name, serotype = None, None
 
         if not (notes := [i.value for i in rec.features[0].qualifiers if i.key == 'note']):
-            # FIX: Raised as ValueError and ensured it's an f-string
             raise ValueError(f'Locus has no "note" qualifiers: {rec.name}')
 
         locus_name, serotype = None, None
@@ -43,7 +42,6 @@ def parse_database(fh):
                 serotype = match.group(1)
 
         if not locus_name:
-            # FIX: Raised as ValueError and added missing 'f' for the f-string
             raise ValueError(f'Locus has no valid "locus" qualifiers: {rec.name}')
 
         loci.append(f'{locus_name} -> {serotype or "Unknown"}')
@@ -79,7 +77,7 @@ def fetch_crossref_dois(search_term):
         return []
 
 # Helper Function: Fetch TaxIDs from NCBI Datasets API
-@st.cache_data(ttl=3600)  # Cache results for 1 hour to prevent redundant API calls
+@st.cache_data(ttl=3600) 
 def fetch_ncbi_taxids(search_term):
     if not search_term.strip():
         return []
@@ -112,6 +110,25 @@ def fetch_ncbi_taxids(search_term):
     except Exception as e:
         return []
 
+# NEW Helper Function: Fetch Repositories for a User/Org
+@st.cache_data(ttl=300)
+def fetch_github_repos(owner):
+    if not owner.strip():
+        return []
+    
+    try:
+        # Using sort=updated to show recently active repos first
+        url = f"https://api.github.com/users/{urllib.parse.quote(owner)}/repos?per_page=100&sort=updated"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
+
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+
+        # Extract just the repository names
+        return [repo['name'] for repo in data]
+    except Exception:
+        # Fails gracefully (e.g., user not found or rate limited)
+        return []
 
 # Helper Function: Fetch .gbk files from the root of the GitHub repo
 @st.cache_data(ttl=300)
@@ -134,20 +151,18 @@ def fetch_github_gbk_files(owner, repo, branch):
     except Exception:
         return None
 
-# NEW Helper Function: Fetch raw database and parse it
+# Helper Function: Fetch raw database and parse it
 @st.cache_data(show_spinner=False, ttl=300)
 def fetch_and_validate_genbank(owner, repo, branch, filename):
     if not filename:
         return None, None, "No file provided."
     try:
-        # Get the raw file from GitHub
         url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{urllib.parse.quote(filename)}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Kaptive-Metadata-Generator/1.0'})
         
         with urllib.request.urlopen(req, timeout=10) as response:
             raw_data = response.read()
             
-        # Parse using io.BytesIO to satisfy binary IO requirement
         fh = io.BytesIO(raw_data)
         loci, extra = parse_database(fh)
         return loci, extra, None
@@ -160,13 +175,24 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.subheader("Database 📂")
     owner = st.text_input("Owner", value="klebgenomics")
-    repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
+
+    # Fetching repositories dynamically based on the owner input
+    repos = fetch_github_repos(owner)
+    
+    if repos:
+        # Keep original workflow seamless by selecting standard repo by default if it exists
+        default_index = repos.index("KoSC-surface-antigen-loci") if "KoSC-surface-antigen-loci" in repos else 0
+        repo = st.selectbox("Repo", options=repos, index=default_index)
+    else:
+        st.warning("⚠️ Could not fetch repositories. Please enter manually.")
+        repo = st.text_input("Repo", value="KoSC-surface-antigen-loci")
+
     branch = st.text_input("Branch", value="main")
 
     gbk_files = fetch_github_gbk_files(owner, repo, branch)
 
     if gbk_files is None:
-        st.error("⚠️ Repository not found. Please check Owner, Repo, and Branch.")
+        st.error("⚠️ Repository or branch not found.")
         genbank = st.text_input("GenBank File (Manual Entry)")
     elif len(gbk_files) == 0:
         st.warning(f"No '.gbk' files found in {owner}/{repo} on branch '{branch}'.")
@@ -282,11 +308,9 @@ with col3:
     else:
         st.info("No DOIs added. Array will default to ['TBD'].")
 
-# --- NEW: Database Validation Section ---
 st.divider()
 st.subheader("Database Validation ✅")
 
-# State variables for validation success locking
 is_db_valid = False
 
 if genbank:
@@ -340,7 +364,7 @@ st.divider()
 # Generate & Preview TOML
 toml_string = toml.dumps(metadata)
 
-st.subheader("Live Preview")
+st.subheader("Live Metadata Preview ♻️")
 st.code(toml_string, language="toml")
 
 download_filename = "metadata.toml" 
