@@ -418,7 +418,7 @@ with col3:
     st.markdown("---")
     st.markdown("**Paper DOIs 📄**")
     
-    search_query = st.text_input("Search Paper by Title ([Crossref](https://www.crossref.org/)")
+    search_query = st.text_input("Search Paper by Title ([Crossref](https://www.crossref.org/))")
     if search_query:
         api_results = fetch_crossref_dois(search_query)
         
