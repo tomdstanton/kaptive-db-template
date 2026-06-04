@@ -12,10 +12,7 @@ from gb_io import iter as GenbankIterator
 st.set_page_config(page_title="Kaptive Database Validator", layout="centered")
 st.title("🧬🦠💉 Kaptive Database Validator")
 st.image("https://github.com/klebgenomics/Kaptive/blob/master/docs/assets/logo.png?raw=true", width=150)
-st.markdown("""
-Fill out the fields below to validate your [Kaptive](https://github.com/klebgenomics/Kaptive) database and generate the metadata file.
-Note that you will need a [Github account](https://github.com/signup) to host your database.
-""")
+st.markdown("Fill out the fields below to validate your [Kaptive](https://github.com/klebgenomics/Kaptive) database and generate the metadata file.\nNote that you will need a [Github account](https://github.com/signup) to host your database.")
 
 # Initialize persistent storage for DOIs and Contacts
 if 'doi_list' not in st.session_state:
@@ -356,8 +353,8 @@ with col2:
         suggested_keyword = f"{genus_letter}{species_letters}_{clean_prefix}"
         suggested_name = f"{organism.replace(' ', '_')}_{prefix}"
 
-        keyword = st.text_input("Keyword", value=suggested_keyword)
-        name = st.text_input("Database Config Name", value=suggested_name)
+        keyword = st.text_input("Database Keyword (for CLI) 🔑", value=suggested_keyword)
+        name = st.text_input("Database Name (for reporting) 📋", value=suggested_name)
     else:
         # Provide targeted feedback depending on what is missing
         if not organism:
