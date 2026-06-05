@@ -617,7 +617,8 @@ with export_col2:
             "Commit Message", value=f"Add metadata for {organism} {prefix}-types",
             help="You can use [conventional commits](https://github.com/tomdstanton/kaptive-db-template/tree/main#database-versioning--release-workflow-) to automatically version your database!"
         )
-        gh_token = st.text_input("GitHub Personal Access Token (PAT)", type="password", help="Requires 'repo' scope.")
+        gh_token = st.text_input("GitHub Personal Access Token (PAT)", type="password", 
+                                 help="For help on how to get your GitHub PAT, see [here](https://docs.github.com/en/enterprise-server@3.19/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).")
         
         can_push = is_valid_version and is_db_valid and gh_token and gh_filepath
         
