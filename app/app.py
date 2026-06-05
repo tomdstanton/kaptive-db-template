@@ -253,7 +253,7 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     st.subheader("Database 💽")
-    owner = st.text_input("Owner 🆔")
+    owner = st.text_input("Owner 🆔", help='GitHub username or organisation where the database repo is hosted.')
 
     repos, repo, branches, branch, gbk_files, genbank = [], "", [], "", [], ""
     
@@ -305,7 +305,8 @@ with col1:
         elif len(name_parts) == 1:
             default_org_name = name_parts[0]
 
-    organism_input = st.text_input("Search Organism Name 🧫", value=default_org_name)
+    organism_input = st.text_input("Search Organism Name 🧫", value=default_org_name, 
+                                   help='This is automatically populated by the database name but can be overridden.')
     
     taxon = 0
     organism = ""
@@ -332,7 +333,7 @@ with col1:
 
 with col2:
     st.subheader("Biology 🦠")
-    prefix = st.text_input("Prefix")
+    prefix = st.text_input("Prefix", help='This refers to the antigen designation, such as "K" for the K-antigen.').upper()
 
     keyword = ""
     name = ""
@@ -349,8 +350,8 @@ with col2:
         suggested_keyword = f"{genus_letter}{species_letters}_{clean_prefix}"
         suggested_name = f"{organism.replace(' ', '_')}_{prefix}"
 
-        keyword = st.text_input("Database Keyword (for CLI) 🔑", value=suggested_keyword)
-        name = st.text_input("Database Name (for reporting) 📋", value=suggested_name)
+        keyword = st.text_input("Database Keyword 🔑", value=suggested_keyword, help='This will be used as the database CLI argument.')
+        name = st.text_input("Database Name 📋", value=suggested_name, help='This will be used to refer to the database in tabular reports.')
     else:
         if not organism:
             st.info("👆 Please select an organism in the Database column to generate naming suggestions.")
@@ -358,22 +359,25 @@ with col2:
             st.info("👆 Please enter an antigen prefix to generate naming suggestions.")
 
     id_threshold = st.slider(
-        "Homolog Amino-Acid Identity Threshold (%)", 
-        min_value=0.0, max_value=100.0, value=82.5, step=0.5, format="%.1f"
+        "Identity Threshold (%)", 
+        min_value=0.0, max_value=100.0, value=82.5, step=0.5, format="%.1f",
+        help="This referes to the pairwiswe amino-acid itdentity cutoff to determine whether two genes are homologs."
     )
     
-    antigen = st.selectbox("Antigen 💉", ["Capsular polysaccharide", "Outer-core-lipopolysaccharide", "Other"])
+    antigen = st.selectbox("Antigen 💉", ["Capsular polysaccharide", "Outer-core-lipopolysaccharide", "Other"],
+                          help='The molecular name of the antigen.')
     if antigen == "Other":
         antigen = st.text_input("Specify Antigen")
 
-    pathway = st.selectbox("Pathway 🧪", ["Wzx/Wzy-dependent", "ABC transporter", "Synthase-dependent", "Other"])
+    pathway = st.selectbox("Pathway 🧪", ["Wzx/Wzy-dependent", "ABC transporter", "Synthase-dependent", "Other"],
+                          help='The biosynthetic pathway that produces the antigen.')
     if pathway == "Other":
         pathway = st.text_input("Specify Pathway")
 
 
 with col3:
     st.subheader("Curation 📚")
-    version_input = st.text_input("Version", value="0.0.0")
+    version_input = st.text_input("Version", value="0.0.0", help='This must adhere to [Semantic Versioning](https://semver.org/).')
 
     is_valid_version = True
     if not semver.VersionInfo.is_valid(version_input):
@@ -609,8 +613,10 @@ with export_col2:
     
     with st.container(border=True):
         gh_filepath = st.text_input("Filepath (e.g., folder/metadata.toml)", value=download_filename)
-        gh_commit_msg = st.text_input("Commit Message", value=f"Add metadata for {organism} {prefix}-types")
-        st.info("🧠 You can use [conventional commits](https://github.com/tomdstanton/kaptive-db-template/tree/main#database-versioning--release-workflow-) to automatically version your database!")
+        gh_commit_msg = st.text_input(
+            "Commit Message", value=f"Add metadata for {organism} {prefix}-types",
+            help="You can use [conventional commits](https://github.com/tomdstanton/kaptive-db-template/tree/main#database-versioning--release-workflow-) to automatically version your database!"
+        )
         gh_token = st.text_input("GitHub Personal Access Token (PAT)", type="password", help="Requires 'repo' scope.")
         
         can_push = is_valid_version and is_db_valid and gh_token and gh_filepath
